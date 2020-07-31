@@ -5,18 +5,17 @@
             <span>动作信息</span>
             <el-button style="margin-left:20px" type="text" icon="el-icon-plus" @click="addScene">添加动作信息</el-button>
         </div>
-        <div v-for="(item, index) in dimensionDisplay" :key=index>
+        <el-button v-if="dimensionDisplay.actionGroup" type="text" size="mini" icon="el-icon-edit" @click="editDimension">编辑</el-button>
+        <div v-for="(item, index) in dimensionDisplay.actionGroup" :key=index>
             <div style="margin-top:10px">
                 <span style="font-size: 14px;">动作信息 {{index + 1}}</span>
-                <el-button type="text" style="margin-left:40px" size="mini" icon="el-icon-edit" @click="editDimension(item)">编辑</el-button>
-                <el-button type="text" size="mini" icon="el-icon-delete" @click="deleteDimension(index)">删除</el-button>
             </div>
         </div>
     </el-card>
 
     <el-dialog title="动作信息" :visible.sync="dialogScene" width="100%" :close-on-click-modal=false :close-on-press-escape=false @open='open' @close="clear">
       <el-form :model="addForm" label-width="100px">
-          <el-row :gutter="20">
+          <el-row :gutter="10">
             <el-col :span="6" v-for="item in initialData" :key="item.key">
               <el-form-item :label="item.name">
                 <el-select v-model="addForm[item.key]" multiple collapse-tags  placeholder="请选择">
@@ -32,6 +31,29 @@
           </el-row>
       </el-form>
       <el-button type="primary" plain icon="el-icon-plus" style="margin-left:30px" @click="actionList">生成动作项</el-button>
+      <el-row :gutter="10" v-if="combination.length > 0" style="margin:20px 0 20px 30px">
+            <el-checkbox-group v-model="checkedList">
+                <el-col :span="6" v-for="(item, index) in combination" :key="index" style="margin-bottom:20px">
+                    <el-checkbox :label="item">{{item.map( n => n.name).join('-')}}</el-checkbox>
+                </el-col>
+            </el-checkbox-group>
+      </el-row>
+      <el-row v-if="combination.length > 0" style="margin:0 0 20px 30px"><el-button type="primary" plain icon="el-icon-plus" @click="actionGroup">动作分组</el-button></el-row>
+      <el-row v-if="finalActionGroup.length > 0" style="margin:0 0 20px 30px">
+          <el-col :span="2" v-for="(item, index) in finalActionGroup" :key="index" style="margin-bottom:20px">
+                <el-dropdown>
+                    <span class="el-dropdown-link">
+                        动作信息{{index + 1}}
+                        <i class="el-icon-arrow-down el-icon--right"></i>
+                        <i style="padding-left: 20px;" class="el-icon-circle-close" @click="deleteActionGroup(index)"></i>
+                    </span>
+                    <el-dropdown-menu slot="dropdown">
+                        <el-dropdown-item v-for="(value, index) in item.details" :key="index">{{value.map( n => n.name).join('-')}}</el-dropdown-item>
+                    </el-dropdown-menu>
+                </el-dropdown>
+          </el-col>
+      </el-row>
+
       <div style="text-align:center">
         <el-button type="primary" @click="submitForm">确定</el-button>
         <el-button @click="cancel">取消</el-button>
@@ -41,6 +63,7 @@
 </template>
 
 <script>
+import { permutationCombination } from '@/utils/common'
 export default {
   name: 'Scene',
   data() {
@@ -48,11 +71,14 @@ export default {
         dialogScene: false,
         addForm: {},
         initialData: [],
-        dimensionDisplay: [],
+        dimensionDisplay: {},
+        combination: [], // 获取所有动作的排列组合项
+        checkedList: [], // 当前选择的动作分组
+        finalActionGroup: [], // 动作分组集合 
     };
   },
   props: {
-    value: Array
+    value: Object
   },
   mounted() {
     this.initialData = [{
@@ -742,43 +768,59 @@ export default {
             ]
         }
     ]
-    this.initialData.forEach(v => { this.$set(this.addForm, v.key, []);}); 
   },
   methods: {
     open() {},
-    actionList() { 
+    actionList() { this.getCombination();},
+    getCombination() {
         const selectData = Object.entries(this.addForm).filter(x => x[1].length > 0)
-        const mapList = new Map(selectData)
-        console.log(mapList)
+        const arrList = [];
+        selectData.forEach( x => {
+            let arr = [];
+            x[1].forEach( m => {
+                this.initialData.forEach( n => {
+                    if (x[0] === n.key) {
+                        arr.push(Object.assign(n.option.find( v => v.key === m),{parent: x[0]}))
+                    }
+                })
+            })
+            arrList.push(arr)
+        })
+        this.combination = permutationCombination(arrList); // 获取所有动作的排列组合项
+    },
+    actionGroup() {
+        if (this.checkedList.length > 0) {
+            this.finalActionGroup.push({id:new Date().getTime(),details:this.checkedList})
+            this.checkedList = []
+        }
+    },
+    deleteActionGroup(index) {
+        this.finalActionGroup.splice(index, 1);
     },
     addScene() {
-        this.dialogScene = true
+        this.dialogScene = true;
+        this.initialData.forEach(v => { this.$set(this.addForm, v.key, []);}); 
     },
     cancel() {
         this.dialogScene = false;
     },
     submitForm() {
-        // this.$refs.addForm.validate((valid) => {
-        //     if (valid) {
-        //         if (this.addForm.id) {
-        //             this.dimensionDisplay = this.dimensionDisplay.map( x => x.id === this.addForm.id ? Object.assign({}, this.addForm) : x)
-        //             this.cancel();
-        //             this.$emit('input', this.dimensionDisplay);
-        //         } else {
-        //             this.addForm.id = new Date().getTime()
-        //             this.dimensionDisplay.push(Object.assign({}, this.addForm))
-        //             this.cancel();
-        //             this.$emit('input', this.dimensionDisplay);
-        //         }
-        //     }
-        // });
+        if(!this.finalActionGroup.length) { this.$message.warning('请配置动作分组！'); return; }
+        this.dimensionDisplay = Object.assign({},{action:JSON.parse(JSON.stringify(this.addForm))},{actionGroup:this.finalActionGroup})
+        this.cancel();
+        this.$emit('input', this.dimensionDisplay);
     },
     clear() {
         this.addForm = {}
+        this.combination = []
+        this.checkedList = []
+        this.finalActionGroup = []
     },
-    editDimension(item) {
-        this.addForm = Object.assign({}, item)
+    editDimension() {
         this.dialogScene = true
+        this.addForm = Object.assign({}, this.dimensionDisplay.action)
+        this.getCombination()
+        this.finalActionGroup = this.dimensionDisplay.actionGroup
     },
     deleteDimension(index) {
         this.dimensionDisplay.splice(index, 1);

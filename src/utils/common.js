@@ -1,17 +1,20 @@
 // 数组中所有排列组合
-export function permutationCombination(arr, index) {
-    var actions = [];
-    var result = [];
-    doExchange(arr, index)
-    function doExchange(arr, index){
-        for (var i = 0; i<arr[index].length; i++) {
-            result[index] = arr[index][i];
-            if (index != arr.length - 1) {
-                doExchange(arr, index + 1)
-            } else {
-                actions.push(result.join('-'))
-            }
+export function permutationCombination(array) {
+    let resultArr = [];
+    array.forEach((arrItem) => {
+        if (resultArr.length === 0) {
+            const firstItem = [];
+            arrItem.forEach(item => { firstItem.push([item]);})
+            resultArr = firstItem
+        } else {
+            const emptyArray = [];
+            resultArr.forEach((item) => {
+                arrItem.forEach((value) => {
+                    emptyArray.push([...item, value])
+                })
+            })
+            resultArr = emptyArray
         }
-    }
-	return actions;
+    });
+    return resultArr;
 }

@@ -20,20 +20,24 @@
         </el-form>
         <div style="text-align:center"><el-button type="primary" @click="configuration">生成场景项</el-button></div>
         <el-card shadow="hover" style="margin-top:40px" v-if="configurationList.length > 0">
-          <el-table :data="configurationList" border style="width: 100%" :header-cell-style="{'text-align':'center'}">
-            <el-table-column label="场景项" prop="name" min-width="30%" align="center"></el-table-column>
+          <el-table :data="dimensionDisplay.actionGroup" border style="width: 100%" :header-cell-style="{'text-align':'center'}">
+            <el-table-column label="场景项" min-width="30%" align="center">
+                <template slot-scope='scope'>
+                    {{scope.row.name.map( n => n.name).join('-')}}
+                </template>
+            </el-table-column>
             <el-table-column label="选择动作" min-width="40%">
               <template slot-scope='scope'>
                 <div v-for="(item,index) in scope.row.action" :key='index'>
-                  <el-radio-group v-model="item.radio">
-                    <el-radio v-for="(n,idx) in item.radioList" :key='idx' :label="n.id">{{index === 0 ? '采集方式': (index === 1 ? '基本信息':'CV数据')}} {{idx + 1}}</el-radio>
+                  <el-radio-group v-model="item.radio" @change="radioChange">
+                    <el-radio v-for="(n,idx) in item.radioList" :key='idx' :label="n.id">{{index === 0 ? '采集方式': (index === 1 ? '基本信息':'动作信息')}} {{idx + 1}}</el-radio>
                   </el-radio-group>
                 </div>
               </template>
             </el-table-column>
             <el-table-column label="操作" min-width="30%" align="center">
               <template slot-scope="scope">
-                <el-button size="mini" type="text" @click="handleDelete(scope.$index, scope.row)">删除</el-button>
+                  <el-switch v-model="scope.row.disabled" @change="sceneStatusChange"></el-switch>
               </template>
             </el-table-column>
           </el-table>
@@ -47,13 +51,15 @@ import { permutationCombination } from '@/utils/common'
 export default {
   name: 'SceneListComponent',
   props: {
-    list: Array
+    list: Array,
+    value: Object
   },
   data() {
     return {
       addForm: {},
+      dimensionDisplay: {},
       configurationList: [],
-      initialData: []
+      initialData: [],
     }
   },
   mounted() {
@@ -792,22 +798,47 @@ export default {
   },
   methods: {
     configuration() {
-     for (let item of this.list) {
-       if (!item.length) {
-         this.$message.warning('维度配置不完全！')
-         return
-       }
-     }
-     permutationCombination([["美食/餐厅线上活动", "地推活动"],["线下主题活动", "单纯品牌曝光"],["地推活动","单纯品牌曝光"]], 0).forEach( x => {
-         let actionArr = []
-         this.list.forEach( x => {
-           actionArr.push({radio: x[0].id,radioList: x})
-         })
-         this.configurationList.push({name : x, action: actionArr})
-     })
+        if(!Object.entries(this.addForm).filter(x => x[1].length > 0).length) { this.$message.warning('请选择场景项！'); return; }
+        for (let item of this.list) {
+            if (item instanceof Array) {
+                if (!item.length) { this.$message.warning('请配置采集方式、基本信息！'); return; }
+            } else {
+                if(!Object.keys(item).length) { this.$message.warning('请配置动作信息！'); return; }
+            }       
+        }
+        this.getCombination()
+        this.$emit('input', this.dimensionDisplay);
     },
-    handleDelete(index) {
-      this.configurationList.splice(index, 1);
+    getCombination() {
+        const selectData = Object.entries(this.addForm).filter(x => x[1].length > 0)
+        const arrList = [];
+        selectData.forEach( x => {
+            let arr = [];
+            x[1].forEach( m => {
+                this.initialData.forEach( n => {
+                    if (x[0] === n.key) { arr.push(Object.assign(n.option.find( v => v.key === m),{parent: x[0]})); }
+                })
+            })
+            arrList.push(arr)
+        })
+        permutationCombination(arrList).forEach( x => {
+            let actionArr = []
+            this.list.forEach( k => {
+                if (k instanceof Array) {
+                   actionArr.push({radio: k[0].id,radioList: k})
+                } else {
+                   actionArr.push({radio: k.actionGroup[0].id,radioList: k.actionGroup})
+                }     
+            })
+            this.configurationList.push({name: x, action: actionArr,disabled: false})
+            this.dimensionDisplay = Object.assign({},{action:JSON.parse(JSON.stringify(this.addForm))},{actionGroup:this.configurationList})
+        })
+    },
+    sceneStatusChange() {
+        this.$emit('input', this.dimensionDisplay);
+    },
+    radioChange() {
+        this.$emit('input', this.dimensionDisplay);
     }
   }
 }
